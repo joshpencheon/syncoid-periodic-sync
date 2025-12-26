@@ -1,5 +1,5 @@
 #!/bin/bash
-# scheduled_zfs_sync.sh
+# scheduled-zfs-sync.sh
 # Runs ZFS backup after Tailscale is connected, logs to syslog, schedules next RTC wakeup, and halts system.
 
 set -euo pipefail
@@ -14,14 +14,6 @@ log() {
   logger -t "$LOG_TAG" "$1"
 }
 
-wait_for_tailscale() {
-  log "Waiting for Tailscale connection..."
-  while ! tailscale status --json | grep -q '"Self":.*"Online":true'; do
-    sleep 5
-  done
-  log "Tailscale connected."
-}
-
 get_next_wake_epoch() {
   # Get next 1am (UTC) epoch time
   now=$(date +%s)
@@ -30,22 +22,25 @@ get_next_wake_epoch() {
 }
 
 main() {
-  wait_for_tailscale
-
   log "Starting ZFS backup."
-  BACKUP_OUTPUT=$(sudo -u syncoid bash -c "$BACKUP_CMD" 2>&1)
+  BACKUP_LOG=$(mktemp /tmp/scheduled-zfs-sync-backup.XXXXXX)
+  sudo -u syncoid bash -c "$BACKUP_CMD" > "$BACKUP_LOG" 2>&1
   BACKUP_EXIT=$?
-  log "Backup output: $BACKUP_OUTPUT"
+  while IFS= read -r line; do
+    log "Backup output: $line"
+  done < "$BACKUP_LOG"
+  rm -f "$BACKUP_LOG"
   if [ $BACKUP_EXIT -eq 0 ]; then
     log "Backup completed successfully."
   else
     log "Backup failed!"
   fi
 
-
   next_wake=$(get_next_wake_epoch)
   log "Scheduling next RTC wakeup at epoch $next_wake."
-  rtcwake -m no -t "$next_wake"
+  if ! rtcwake -m no -t "$next_wake"; then
+    log "ERROR: rtcwake failed to schedule next wakeup."
+  fi
 
   # Ensure system has been up at least 5 minutes past scheduled wake
   boot_time=$(date -d "$(uptime -s)" +%s)
@@ -57,16 +52,23 @@ main() {
     sleep "$wait_time"
   fi
 
-  # Check for logged-in users (excluding root and syncoid)
-  LOGGED_IN_USERS=$(who | awk '{print $1}' | grep -vE '^(root|syncoid)$' | sort | uniq)
-  if [ -n "$LOGGED_IN_USERS" ]; then
+  # Check for logged-in users (including root and syncoid)
+  while true; do
+    LOGGED_IN_USERS=$(who | awk '{print $1}' | sort | uniq)
+    if [ -z "$LOGGED_IN_USERS" ]; then
+      break
+    fi
     log "Shutdown deferred: users are logged in: $LOGGED_IN_USERS"
-    exit 0
+    wall "[$LOG_TAG] Shutdown deferred: users are logged in: $LOGGED_IN_USERS. System will retry shutdown in 5 minutes."
+    log "System uptime: $(uptime -p)"
+    sleep 300
+  done
+
+  log "Halting system for low power (systemctl poweroff)."
+  if ! systemctl poweroff; then
+    log "ERROR: systemctl poweroff failed."
+    exit 1
   fi
-
-  log "Halting system for low power."
-  halt
-
 }
 
 main "$@"

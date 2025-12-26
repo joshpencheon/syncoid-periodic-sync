@@ -1,12 +1,13 @@
 [Unit]
 Description=Scheduled ZFS Sync with RTC Wake and Tailscale Wait
-After=network-online.target
+After=network-online.target tailscaled.service
 Wants=network-online.target
 
 [Service]
 Type=simple
 User=root
-ExecStart=/usr/local/bin/scheduled_zfs_sync.sh
+ExecStartPre=/bin/bash -c 'until tailscale status --json | grep -q "\"Self\":.*\"Online\":true"; do sleep 5; done'
+ExecStart=/usr/local/bin/scheduled-zfs-sync.sh
 StandardOutput=journal
 StandardError=journal
 Restart=no
