@@ -1,0 +1,15 @@
+[Unit]
+Description=Scheduled ZFS Sync with RTC Wake and Tailscale Wait
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=root
+ExecStart=/usr/local/bin/scheduled_zfs_sync.sh
+StandardOutput=journal
+StandardError=journal
+Restart=no
+
+[Install]
+WantedBy=multi-user.target
