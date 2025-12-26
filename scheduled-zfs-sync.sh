@@ -54,9 +54,7 @@ wait_for_minimum_uptime() {
   fi
 }
 
-
-main() {
-
+run_zfs_backup() {
   log "Starting ZFS backup."
   BACKUP_LOG=$(mktemp /tmp/scheduled-zfs-sync-backup.XXXXXX)
   if sudo -u syncoid "${BACKUP_CMD[@]}" > "$BACKUP_LOG" 2>&1; then
@@ -67,30 +65,32 @@ main() {
   while IFS= read -r line; do
     log "Backup output: $line"
   done < "$BACKUP_LOG"
-  rm -f "$BACKUP_LOG"
+  rm "$BACKUP_LOG"
   if [ "$backup_status" -eq 0 ]; then
     log "Backup completed successfully."
   else
     log "Backup failed!"
   fi
+}
 
-
-  wait_for_minimum_uptime
-  wait_for_no_logged_in_users
-
+schedule_next_wake() {
   next_wake=$(get_next_wake_epoch)
   log "Scheduling next RTC wakeup at epoch $next_wake."
   if ! rtcwake -m no -t "$next_wake"; then
     log "ERROR: rtcwake failed to schedule next wakeup."
   fi
+}
 
+halt_system() {
   log "Halting system for low power (systemctl poweroff)."
   if ! systemctl poweroff; then
     log "ERROR: systemctl poweroff failed."
     exit 1
   fi
-
-
 }
 
-main "$@"
+run_zfs_backup
+wait_for_minimum_uptime
+wait_for_no_logged_in_users
+schedule_next_wake
+halt_system
