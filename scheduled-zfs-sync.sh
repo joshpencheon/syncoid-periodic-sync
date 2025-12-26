@@ -31,7 +31,33 @@ get_next_wake_epoch() {
 }
 
 
+wait_for_no_logged_in_users() {
+  while true; do
+    LOGGED_IN_USERS=$(who | awk '{print $1}' | sort | uniq)
+    if [ -z "$LOGGED_IN_USERS" ]; then
+      break
+    fi
+    log "Shutdown deferred: users are logged in: $LOGGED_IN_USERS"
+    wall "[$LOG_TAG] Shutdown deferred: users are logged in: $LOGGED_IN_USERS. System will retry shutdown in 5 minutes."
+    log "System uptime: $(uptime -p)"
+    sleep 300
+  done
+}
+
+wait_for_minimum_uptime() {
+  next_wake=$(get_next_wake_epoch)
+  boot_time=$(date -d "$(uptime -s)" +%s)
+  min_run_time=$((next_wake + MIN_UPTIME))
+  now=$(date +%s)
+  if [ "$now" -lt "$min_run_time" ]; then
+    wait_time=$((min_run_time - now))
+    log "Waiting $wait_time seconds to allow SSH access before halt."
+    sleep "$wait_time"
+  fi
+}
+
 main() {
+
   log "Starting ZFS backup."
   BACKUP_LOG=$(mktemp /tmp/scheduled-zfs-sync-backup.XXXXXX)
   sudo -u syncoid bash -c "$BACKUP_CMD" > "$BACKUP_LOG" 2>&1
@@ -46,39 +72,22 @@ main() {
     log "Backup failed!"
   fi
 
+  wait_for_minimum_uptime
+  wait_for_no_logged_in_users
+
   next_wake=$(get_next_wake_epoch)
   log "Scheduling next RTC wakeup at epoch $next_wake."
   if ! rtcwake -m no -t "$next_wake"; then
     log "ERROR: rtcwake failed to schedule next wakeup."
   fi
 
-  # Ensure system has been up at least 5 minutes past scheduled wake
-  boot_time=$(date -d "$(uptime -s)" +%s)
-  min_run_time=$((next_wake + MIN_UPTIME))
-  now=$(date +%s)
-  if [ "$now" -lt "$min_run_time" ]; then
-    wait_time=$((min_run_time - now))
-    log "Waiting $wait_time seconds to allow SSH access before halt."
-    sleep "$wait_time"
-  fi
-
-  # Check for logged-in users (including root and syncoid)
-  while true; do
-    LOGGED_IN_USERS=$(who | awk '{print $1}' | sort | uniq)
-    if [ -z "$LOGGED_IN_USERS" ]; then
-      break
-    fi
-    log "Shutdown deferred: users are logged in: $LOGGED_IN_USERS"
-    wall "[$LOG_TAG] Shutdown deferred: users are logged in: $LOGGED_IN_USERS. System will retry shutdown in 5 minutes."
-    log "System uptime: $(uptime -p)"
-    sleep 300
-  done
-
   log "Halting system for low power (systemctl poweroff)."
   if ! systemctl poweroff; then
     log "ERROR: systemctl poweroff failed."
     exit 1
   fi
+
+
 }
 
 main "$@"
