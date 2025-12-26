@@ -8,6 +8,8 @@ LOG_TAG="scheduled-zfs-sync"
 BACKUP_CMD=(syncoid --sendoptions=raw --no-privilege-elevation --no-sync-snap --no-rollback --use-hold ubuntu@nas:main-pool/time-machine backup-pool/time-machine)
 WAKE_TIMES=("02:00" "20:00")
 MIN_UPTIME=300  # 5 minutes in seconds
+USER_WAIT_SLEEP=300  # Wait time between user checks in seconds
+
 
 log() {
   logger -t "$LOG_TAG" -- "$1"
@@ -38,8 +40,7 @@ wait_for_no_logged_in_users() {
     fi
     log "Shutdown deferred: users are logged in: $LOGGED_IN_USERS"
     wall "[$LOG_TAG] Shutdown deferred: users are logged in: $LOGGED_IN_USERS. System will retry shutdown in 5 minutes."
-    log "System uptime: $(uptime -p)"
-    sleep 300
+    sleep "$USER_WAIT_SLEEP"
   done
 }
 

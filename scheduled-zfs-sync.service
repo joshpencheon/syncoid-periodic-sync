@@ -10,7 +10,9 @@ ExecStartPre=/bin/bash -c 'until tailscale status --json | grep -q "\"Self\":.*\
 ExecStart=/usr/local/bin/scheduled-zfs-sync.sh
 StandardOutput=journal
 StandardError=journal
-Restart=no
+Restart=on-failure
+TimeoutStartSec=300
+
 
 [Install]
 WantedBy=multi-user.target
