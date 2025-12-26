@@ -5,7 +5,14 @@
 set -euo pipefail
 
 LOG_TAG="scheduled-zfs-sync"
-BACKUP_CMD=(syncoid --sendoptions=raw --no-privilege-elevation --no-sync-snap --no-rollback --use-hold ubuntu@nas:main-pool/time-machine backup-pool/time-machine)
+
+# Backup parameters (edit these to match your environment)
+REMOTE_USER="ubuntu"
+REMOTE_HOST="nas"
+SOURCE_DATASET="main-pool/time-machine"
+TARGET_DATASET="backup-pool/time-machine"
+
+BACKUP_CMD=(syncoid --sendoptions=raw --no-privilege-elevation --no-sync-snap --no-rollback --use-hold "$REMOTE_USER@$REMOTE_HOST:$SOURCE_DATASET" "$TARGET_DATASET")
 WAKE_TIMES=("02:00" "20:00")
 MIN_UPTIME=300  # 5 minutes in seconds
 USER_WAIT_SLEEP=300  # Wait time between user checks in seconds
