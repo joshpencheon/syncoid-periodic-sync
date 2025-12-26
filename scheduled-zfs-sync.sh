@@ -6,20 +6,30 @@ set -euo pipefail
 
 LOG_TAG="scheduled-zfs-sync"
 BACKUP_CMD="syncoid --sendoptions=raw --no-privilege-elevation --no-sync-snap --no-rollback --use-hold ubuntu@nas:main-pool/time-machine backup-pool/time-machine"
-WAKE_HOUR=1
-WAKE_MIN=0
+WAKE_TIMES=("02:00" "20:00")
 MIN_UPTIME=300  # 5 minutes in seconds
+
 
 log() {
   logger -t "$LOG_TAG" "$1"
 }
 
 get_next_wake_epoch() {
-  # Get next 1am (UTC) epoch time
   now=$(date +%s)
-  next_wake=$(date -d "tomorrow ${WAKE_HOUR}:${WAKE_MIN}" +%s)
+  next_wake=""
+  for t in "${WAKE_TIMES[@]}"; do
+    candidate=$(date -d "$t" +%s)
+    # If the time has already passed today, use tomorrow
+    if [ "$candidate" -le "$now" ]; then
+      candidate=$(date -d "tomorrow $t" +%s)
+    fi
+    if [ -z "$next_wake" ] || [ "$candidate" -lt "$next_wake" ]; then
+      next_wake="$candidate"
+    fi
+  done
   echo "$next_wake"
 }
+
 
 main() {
   log "Starting ZFS backup."
