@@ -5,13 +5,12 @@
 set -euo pipefail
 
 LOG_TAG="scheduled-zfs-sync"
-BACKUP_CMD="syncoid --sendoptions=raw --no-privilege-elevation --no-sync-snap --no-rollback --use-hold ubuntu@nas:main-pool/time-machine backup-pool/time-machine"
+BACKUP_CMD=(syncoid --sendoptions=raw --no-privilege-elevation --no-sync-snap --no-rollback --use-hold ubuntu@nas:main-pool/time-machine backup-pool/time-machine)
 WAKE_TIMES=("02:00" "20:00")
 MIN_UPTIME=300  # 5 minutes in seconds
 
-
 log() {
-  logger -t "$LOG_TAG" "$1"
+  logger -t "$LOG_TAG" -- "$1"
 }
 
 get_next_wake_epoch() {
@@ -60,17 +59,21 @@ main() {
 
   log "Starting ZFS backup."
   BACKUP_LOG=$(mktemp /tmp/scheduled-zfs-sync-backup.XXXXXX)
-  sudo -u syncoid bash -c "$BACKUP_CMD" > "$BACKUP_LOG" 2>&1
-  BACKUP_EXIT=$?
+  if sudo -u syncoid "${BACKUP_CMD[@]}" > "$BACKUP_LOG" 2>&1; then
+    backup_status=0
+  else
+    backup_status=$?
+  fi
   while IFS= read -r line; do
     log "Backup output: $line"
   done < "$BACKUP_LOG"
   rm -f "$BACKUP_LOG"
-  if [ $BACKUP_EXIT -eq 0 ]; then
+  if [ "$backup_status" -eq 0 ]; then
     log "Backup completed successfully."
   else
     log "Backup failed!"
   fi
+
 
   wait_for_minimum_uptime
   wait_for_no_logged_in_users
