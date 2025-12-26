@@ -45,16 +45,16 @@ wait_for_no_logged_in_users() {
 }
 
 wait_for_minimum_uptime() {
-  next_wake=$(get_next_wake_epoch)
   boot_time=$(date -d "$(uptime -s)" +%s)
-  min_run_time=$((next_wake + MIN_UPTIME))
   now=$(date +%s)
+  min_run_time=$((boot_time + MIN_UPTIME))
   if [ "$now" -lt "$min_run_time" ]; then
     wait_time=$((min_run_time - now))
     log "Waiting $wait_time seconds to allow SSH access before halt."
     sleep "$wait_time"
   fi
 }
+
 
 main() {
 
