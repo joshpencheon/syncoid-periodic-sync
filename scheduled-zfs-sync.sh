@@ -1,6 +1,6 @@
 #!/bin/bash
 # scheduled-zfs-sync.sh
-# Runs ZFS backup after Tailscale is connected, logs to syslog, schedules next RTC wakeup, and halts system.
+# Runs ZFS backup, logs to syslog, schedules next RTC wakeup, and halts system.
 
 set -euo pipefail
 
@@ -12,11 +12,12 @@ REMOTE_HOST="nas"
 SOURCE_DATASET="main-pool/time-machine"
 TARGET_DATASET="backup-pool/time-machine"
 
+BACKUP_USER="syncoid"
 BACKUP_CMD=(syncoid --sendoptions=raw --no-privilege-elevation --no-sync-snap --no-rollback --use-hold "$REMOTE_USER@$REMOTE_HOST:$SOURCE_DATASET" "$TARGET_DATASET")
+
 WAKE_TIMES=("02:00" "20:00")
 MIN_UPTIME=300  # 5 minutes in seconds
 USER_WAIT_SLEEP=300  # Wait time between user checks in seconds
-
 
 log() {
   logger -t "$LOG_TAG" -- "$1"
@@ -46,7 +47,7 @@ wait_for_no_logged_in_users() {
       break
     fi
     log "Shutdown deferred: users are logged in: $LOGGED_IN_USERS"
-    wall "[$LOG_TAG] Shutdown deferred: users are logged in: $LOGGED_IN_USERS. System will retry shutdown in 5 minutes."
+    wall "[$LOG_TAG] Shutdown deferred: users are logged in. System will retry shutdown in $USER_WAIT_SLEEP seconds."
     sleep "$USER_WAIT_SLEEP"
   done
 }
@@ -65,15 +66,15 @@ wait_for_minimum_uptime() {
 run_zfs_backup() {
   log "Starting ZFS backup."
   BACKUP_LOG=$(mktemp /tmp/scheduled-zfs-sync-backup.XXXXXX)
-  if sudo -u syncoid "${BACKUP_CMD[@]}" > "$BACKUP_LOG" 2>&1; then
-    backup_status=0
-  else
-    backup_status=$?
-  fi
+
+  sudo -u "$BACKUP_USER" "${BACKUP_CMD[@]}" > "$BACKUP_LOG" 2>&1
+  backup_status=$?
+
   while IFS= read -r line; do
     log "Backup output: $line"
   done < "$BACKUP_LOG"
   rm "$BACKUP_LOG"
+
   if [ "$backup_status" -eq 0 ]; then
     log "Backup completed successfully."
   else
