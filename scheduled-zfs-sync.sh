@@ -78,15 +78,20 @@ run_zfs_backup() {
   if [ "$backup_status" -eq 0 ]; then
     log "Backup completed successfully."
   else
-    log "Backup failed!"
+    log "ERROR: Backup failed!"
   fi
 }
 
 schedule_next_wake() {
   next_wake=$(get_next_wake_epoch)
   log "Scheduling next RTC wakeup at epoch $next_wake."
-  if ! rtcwake -m no -t "$next_wake"; then
-    log "ERROR: rtcwake failed to schedule next wakeup."
+
+  wakealarm_path="/sys/class/rtc/rtc0/wakealarm"
+  if [ -w "$wakealarm_path" ]; then
+    echo "$next_wake" | sudo tee "$wakealarm_path" > /dev/null
+    log "Wakealarm set for $next_wake."
+  else
+    log "ERROR: Cannot write to $wakealarm_path. Wakeup not scheduled."
   fi
 }
 
