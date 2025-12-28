@@ -8,11 +8,8 @@ Type=simple
 User=root
 ExecStartPre=/bin/bash -c 'until tailscale status --json | jq -e ".Self.Online == true" >/dev/null; do sleep 5; done'
 ExecStart=/usr/local/bin/scheduled-zfs-sync.sh
-StandardOutput=journal
-StandardError=journal
-Restart=on-failure
 TimeoutStartSec=300
-
+Restart=on-failure
 
 [Install]
 WantedBy=multi-user.target

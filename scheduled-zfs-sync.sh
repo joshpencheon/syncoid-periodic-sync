@@ -4,8 +4,6 @@
 
 set -euo pipefail
 
-LOG_TAG="scheduled-zfs-sync"
-
 # Backup parameters (edit these to match your environment)
 REMOTE_USER="ubuntu"
 REMOTE_HOST="nas"
@@ -20,7 +18,11 @@ MIN_UPTIME=300  # 5 minutes in seconds
 USER_WAIT_SLEEP=300  # Wait time between user checks in seconds
 
 log() {
-  logger -t "$LOG_TAG" -- "$1"
+  # Usage: log LEVEL MESSAGE
+  # Example: log 3 "An error occurred"
+  local level="$1"
+  shift
+  echo "<$level>$*"
 }
 
 get_next_wake_epoch() {
@@ -41,15 +43,11 @@ get_next_wake_epoch() {
 
 
 wait_for_no_logged_in_users() {
-  while true; do
-    LOGGED_IN_USERS=$(who | awk '{print $1}' | sort | uniq)
-    if [ -z "$LOGGED_IN_USERS" ]; then
-      break
-    fi
-    log "Shutdown deferred: users are logged in: $LOGGED_IN_USERS"
-    wall "[$LOG_TAG] Shutdown deferred: users are logged in. System will retry shutdown in $USER_WAIT_SLEEP seconds."
-    sleep "$USER_WAIT_SLEEP"
-  done
+  LOGGED_IN_USERS=$(who | awk '{print $1}' | sort | uniq)
+  if [ -n "$LOGGED_IN_USERS" ]; then
+    log 3 "Shutdown cancelled: users are logged in: $LOGGED_IN_USERS"
+    exit 1
+  fi
 }
 
 wait_for_minimum_uptime() {
@@ -58,53 +56,60 @@ wait_for_minimum_uptime() {
   min_run_time=$((boot_time + MIN_UPTIME))
   if [ "$now" -lt "$min_run_time" ]; then
     wait_time=$((min_run_time - now))
-    log "Waiting $wait_time seconds to allow SSH access before halt."
+    log 6 "Waiting $wait_time seconds to allow SSH access before halt."
     sleep "$wait_time"
   fi
 }
 
 run_zfs_backup() {
-  log "Starting ZFS backup."
+  log 6 "Starting ZFS backup."
   BACKUP_LOG=$(mktemp /tmp/scheduled-zfs-sync-backup.XXXXXX)
 
-  sudo -u "$BACKUP_USER" "${BACKUP_CMD[@]}" > "$BACKUP_LOG" 2>&1
-  backup_status=$?
+  if sudo -u "$BACKUP_USER" "${BACKUP_CMD[@]}" > "$BACKUP_LOG" 2>&1; then
+    backup_status=0
+  else
+    backup_status=$?
+  fi
 
   while IFS= read -r line; do
-    log "Backup output: $line"
+    log 6 "Backup output: $line"
   done < "$BACKUP_LOG"
   rm "$BACKUP_LOG"
 
   if [ "$backup_status" -eq 0 ]; then
-    log "Backup completed successfully."
+    log 6 "Backup completed successfully."
   else
-    log "ERROR: Backup failed!"
+    log 3 "ERROR: Backup failed!"
   fi
 }
 
 schedule_next_wake() {
   next_wake=$(get_next_wake_epoch)
-  log "Scheduling next RTC wakeup at epoch $next_wake."
+  log 6 "Scheduling next RTC wakeup at epoch $next_wake."
 
   wakealarm_path="/sys/class/rtc/rtc0/wakealarm"
   if [ -w "$wakealarm_path" ]; then
     echo "$next_wake" | sudo tee "$wakealarm_path" > /dev/null
-    log "Wakealarm set for $next_wake."
+    log 6 "Wakealarm set for $next_wake."
   else
-    log "ERROR: Cannot write to $wakealarm_path. Wakeup not scheduled."
+    log 3 "ERROR: Cannot write to $wakealarm_path. Wakeup not scheduled."
   fi
 }
 
 halt_system() {
-  log "Halting system for low power (systemctl poweroff)."
+  log 6 "Halting system for low power (systemctl poweroff)."
   if ! systemctl poweroff; then
-    log "ERROR: systemctl poweroff failed."
+    log 3 "ERROR: systemctl poweroff failed."
     exit 1
   fi
 }
 
-run_zfs_backup
-wait_for_minimum_uptime
-wait_for_no_logged_in_users
-schedule_next_wake
-halt_system
+main() {
+  run_zfs_backup
+  wait_for_minimum_uptime
+  wait_for_no_logged_in_users
+  schedule_next_wake
+  halt_system
+}
+
+main
