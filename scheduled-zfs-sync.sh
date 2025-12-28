@@ -89,6 +89,7 @@ schedule_next_wake() {
 
   wakealarm_path="/sys/class/rtc/rtc0/wakealarm"
   if [ -w "$wakealarm_path" ]; then
+    echo "0"          | sudo tee "$wakealarm_path" > /dev/null
     echo "$next_wake" | sudo tee "$wakealarm_path" > /dev/null
     log 6 "Wakealarm set for $next_wake."
   else
