@@ -10,10 +10,12 @@ It is intended to be used between Raspberry Pi 5 devices, which support RTC-sche
      ```sh
      chmod +x /usr/local/bin/scheduled-zfs-sync.sh
      ```
-   - Place `scheduled-zfs-sync.service` in `/etc/systemd/system/`.
-2. **Enable and start the service:**
+   - Place `scheduled-zfs-sync.service` and `scheduled-zfs-sync.timer` in `/etc/systemd/system/`.
+2. **Enable and start the timer:**
    ```sh
    sudo systemctl daemon-reload
-   sudo systemctl enable --now scheduled-zfs-sync.service
+   sudo systemctl enable --now scheduled-zfs-sync.timer
    ```
+   This will automatically run the sync service every 15 minutes until it succeeds (noting that it'll schedule a wake time and shut down the system when it does complete the sync successfully).
+
 
