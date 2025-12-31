@@ -21,4 +21,3 @@ It is intended to be used between Raspberry Pi 5 devices, which support RTC-sche
 ## TODO
 - [ ] Support separate config file
 - [ ] Package as .deb
-- [ ] Add 'stay on' ability via file on source system

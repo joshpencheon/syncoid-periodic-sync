@@ -9,9 +9,10 @@ REMOTE_USER="ubuntu"
 REMOTE_HOST="nas"
 SOURCE_DATASET="main-pool/time-machine"
 TARGET_DATASET="backup-pool/time-machine"
-
 BACKUP_USER="syncoid"
-BACKUP_CMD=(syncoid --sendoptions=raw --no-privilege-elevation --no-sync-snap --no-rollback --use-hold "$REMOTE_USER@$REMOTE_HOST:$SOURCE_DATASET" "$TARGET_DATASET")
+
+SSH_REMOTE="$REMOTE_USER@$REMOTE_HOST"
+BACKUP_CMD=(syncoid --sendoptions=raw --no-privilege-elevation --no-sync-snap --no-rollback --use-hold "$SSH_REMOTE:$SOURCE_DATASET" "$TARGET_DATASET")
 
 WAKE_TIMES=("02:00" "20:00")
 MIN_UPTIME=300  # 5 minutes in seconds
@@ -63,6 +64,29 @@ run_zfs_backup() {
   fi
 }
 
+schedule_next_wake() {
+  next_wake=$(get_next_wake_epoch)
+  log 6 "Scheduling next RTC wakeup at epoch $next_wake."
+
+  wakealarm_path="/sys/class/rtc/rtc0/wakealarm"
+  if [ -w "$wakealarm_path" ]; then
+    echo "0"          | sudo tee "$wakealarm_path" > /dev/null
+    echo "$next_wake" | sudo tee "$wakealarm_path" > /dev/null
+    log 6 "Wakealarm set for $next_wake."
+  else
+    log 3 "ERROR: Cannot write to $wakealarm_path. Wakeup not scheduled."
+  fi
+}
+
+should_shutdown_when_done() {
+  if ssh "$SSH_REMOTE" [ -f offsite-stay-online ]; then
+    log 3 "Not scheduling shutdown; 'stay online' file found on source system"
+    false
+  else
+    true
+  fi
+}
+
 wait_for_minimum_uptime() {
   boot_time=$(date -d "$(uptime -s)" +%s)
   now=$(date +%s)
@@ -82,20 +106,6 @@ wait_for_no_logged_in_users() {
   fi
 }
 
-schedule_next_wake() {
-  next_wake=$(get_next_wake_epoch)
-  log 6 "Scheduling next RTC wakeup at epoch $next_wake."
-
-  wakealarm_path="/sys/class/rtc/rtc0/wakealarm"
-  if [ -w "$wakealarm_path" ]; then
-    echo "0"          | sudo tee "$wakealarm_path" > /dev/null
-    echo "$next_wake" | sudo tee "$wakealarm_path" > /dev/null
-    log 6 "Wakealarm set for $next_wake."
-  else
-    log 3 "ERROR: Cannot write to $wakealarm_path. Wakeup not scheduled."
-  fi
-}
-
 halt_system() {
   log 6 "Halting system for low power (systemctl poweroff)."
   if ! systemctl poweroff; then
@@ -106,10 +116,13 @@ halt_system() {
 
 main() {
   run_zfs_backup
-  wait_for_minimum_uptime
-  wait_for_no_logged_in_users
   schedule_next_wake
-  halt_system
+
+  if should_shutdown_when_done; then
+    wait_for_minimum_uptime
+    wait_for_no_logged_in_users
+    halt_system
+  fi
 }
 
 main
