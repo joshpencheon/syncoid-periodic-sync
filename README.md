@@ -18,4 +18,7 @@ It is intended to be used between Raspberry Pi 5 devices, which support RTC-sche
    ```
    This will automatically run the sync service every 15 minutes until it succeeds (noting that it'll schedule a wake time and shut down the system when it does complete the sync successfully).
 
-
+## TODO
+- [ ] Support separate config file
+- [ ] Package as .deb
+- [ ] Add 'stay on' ability via file on source system
