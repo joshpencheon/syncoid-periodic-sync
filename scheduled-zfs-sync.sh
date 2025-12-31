@@ -41,26 +41,6 @@ get_next_wake_epoch() {
   echo "$next_wake"
 }
 
-
-wait_for_no_logged_in_users() {
-  LOGGED_IN_USERS=$(who | awk '{print $1}' | sort | uniq)
-  if [ -n "$LOGGED_IN_USERS" ]; then
-    log 3 "Shutdown cancelled: users are logged in: $LOGGED_IN_USERS"
-    exit 1
-  fi
-}
-
-wait_for_minimum_uptime() {
-  boot_time=$(date -d "$(uptime -s)" +%s)
-  now=$(date +%s)
-  min_run_time=$((boot_time + MIN_UPTIME))
-  if [ "$now" -lt "$min_run_time" ]; then
-    wait_time=$((min_run_time - now))
-    log 6 "Waiting $wait_time seconds to allow SSH access before halt."
-    sleep "$wait_time"
-  fi
-}
-
 run_zfs_backup() {
   log 6 "Starting ZFS backup."
   BACKUP_LOG=$(mktemp /tmp/scheduled-zfs-sync-backup.XXXXXX)
@@ -80,6 +60,25 @@ run_zfs_backup() {
     log 6 "Backup completed successfully."
   else
     log 3 "ERROR: Backup failed!"
+  fi
+}
+
+wait_for_minimum_uptime() {
+  boot_time=$(date -d "$(uptime -s)" +%s)
+  now=$(date +%s)
+  min_run_time=$((boot_time + MIN_UPTIME))
+  if [ "$now" -lt "$min_run_time" ]; then
+    wait_time=$((min_run_time - now))
+    log 6 "Waiting $wait_time seconds to allow SSH access before halt."
+    sleep "$wait_time"
+  fi
+}
+
+wait_for_no_logged_in_users() {
+  LOGGED_IN_USERS=$(who | awk '{print $1}' | sort | uniq)
+  if [ -n "$LOGGED_IN_USERS" ]; then
+    log 3 "Shutdown cancelled: users are logged in: $LOGGED_IN_USERS"
+    exit 1
   fi
 }
 
