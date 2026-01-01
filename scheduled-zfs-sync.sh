@@ -79,7 +79,7 @@ schedule_next_wake() {
 }
 
 should_shutdown_when_done() {
-  if ssh "$SSH_REMOTE" [ -f offsite-stay-online ]; then
+  if sudo -u "$BACKUP_USER" ssh "$SSH_REMOTE" [ -f offsite-stay-online ]; then
     log 3 "Not scheduling shutdown; 'stay online' file found on source system"
     false
   else
