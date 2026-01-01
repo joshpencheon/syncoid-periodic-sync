@@ -98,19 +98,17 @@ wait_for_minimum_uptime() {
   fi
 }
 
-wait_for_no_logged_in_users() {
+shutdown_unless_users_logged_in() {
   LOGGED_IN_USERS=$(who | awk '{print $1}' | sort | uniq)
-  if [ -n "$LOGGED_IN_USERS" ]; then
-    log 3 "Shutdown cancelled: users are logged in: $LOGGED_IN_USERS"
-    exit 1
-  fi
-}
 
-halt_system() {
-  log 6 "Halting system for low power (systemctl poweroff)."
-  if ! systemctl poweroff; then
-    log 3 "ERROR: systemctl poweroff failed."
-    exit 1
+  if [ -n "$LOGGED_IN_USERS" ]; then
+    log 3 "Skipping shutdown as users are logged in: $LOGGED_IN_USERS"
+  else
+    log 6 "Halting system for low power (systemctl poweroff)."
+    if ! systemctl poweroff; then
+      log 3 "ERROR: systemctl poweroff failed."
+      exit 1
+    fi
   fi
 }
 
@@ -120,8 +118,7 @@ main() {
 
   if should_shutdown_when_done; then
     wait_for_minimum_uptime
-    wait_for_no_logged_in_users
-    halt_system
+    shutdown_unless_users_logged_in
   fi
 }
 
