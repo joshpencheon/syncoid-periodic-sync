@@ -8,4 +8,3 @@ Type=oneshot
 User=root
 ExecStartPre=/bin/bash -c 'until tailscale status --json | jq -e ".Self.Online == true" >/dev/null; do sleep 5; done'
 ExecStart=/usr/local/bin/scheduled-zfs-sync.sh
-TimeoutStartSec=300
