@@ -12,7 +12,7 @@ TARGET_DATASET="backup-pool/time-machine"
 BACKUP_USER="syncoid"
 
 SSH_REMOTE="$REMOTE_USER@$REMOTE_HOST"
-BACKUP_CMD=(syncoid --sendoptions=raw --no-privilege-elevation --no-sync-snap --no-rollback --use-hold "$SSH_REMOTE:$SOURCE_DATASET" "$TARGET_DATASET")
+BACKUP_CMD=(syncoid --debug --sendoptions=raw --no-privilege-elevation --no-sync-snap --no-rollback --use-hold "$SSH_REMOTE:$SOURCE_DATASET" "$TARGET_DATASET")
 
 WAKE_TIMES=("02:00" "20:00")
 MIN_UPTIME=300  # 5 minutes in seconds
